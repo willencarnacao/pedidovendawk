@@ -1,0 +1,62 @@
+unit uDBConnection;
+
+interface
+
+uses
+  System.SysUtils, System.IniFiles, FireDAC.Comp.Client, FireDAC.Stan.Def,
+  FireDAC.Stan.Intf, FireDAC.DApt, FireDAC.Phys, FireDAC.Phys.MySQL,
+  FireDAC.Phys.MySQLDef;
+
+type
+  TDBConnection = class
+  private
+    FConn: TFDConnection;
+  public
+    constructor Create(const AIniPath: string);
+    destructor Destroy; override;
+    function Connection: TFDConnection;
+  end;
+
+implementation
+
+{ TDBConnection }
+
+constructor TDBConnection.Create(const AIniPath: string);
+var
+  Ini: TIniFile;
+  DriverLink: TFDPhysMySQLDriverLink;
+begin
+  FConn := TFDConnection.Create(nil);
+  Ini := TIniFile.Create(AIniPath);
+  try
+    DriverLink := TFDPhysMySQLDriverLink.Create(nil);
+    DriverLink.VendorLib := Ini.ReadString('Database', 'Library', '');
+
+    FConn.LoginPrompt := False;
+    FConn.Params.Clear;
+    FConn.DriverName := 'MySQL';
+    FConn.Params.Add('Server=' + Ini.ReadString('Database', 'Server', '127.0.0.1'));
+    FConn.Params.Add('Port=' + Ini.ReadString('Database', 'Port', '3306'));
+    FConn.Params.Add('User_Name=' + Ini.ReadString('Database', 'Username', 'root'));
+    FConn.Params.Add('Password=' + Ini.ReadString('Database', 'Password', ''));
+    FConn.Params.Add('Database=' + Ini.ReadString('Database', 'Database', 'wktech'));
+    FConn.Params.Add('CharacterSet=utf8mb4');
+    FConn.Params.Values['UseSSL'] := 'False';
+    FConn.Connected := True;
+  finally
+    Ini.Free;
+  end;
+end;
+
+destructor TDBConnection.Destroy;
+begin
+  FConn.Free;
+  inherited;
+end;
+
+function TDBConnection.Connection: TFDConnection;
+begin
+  Result := FConn;
+end;
+
+end.

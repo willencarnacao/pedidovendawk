@@ -1,0 +1,166 @@
+unit uPedidoDAO;
+
+interface
+
+uses
+  uPedido, FireDAC.Comp.Client;
+
+type
+  TPedidoDAO = class
+  private
+    FConn: TFDConnection;
+  public
+    constructor Create(AConn: TFDConnection);
+    function InserirPedido(APedido: TPedido): Integer;
+    procedure CarregarPedido(ANumero: Integer; APedido: TPedido);
+    procedure CancelarPedido(ANumero: Integer);
+  end;
+
+implementation
+
+uses System.SysUtils;
+
+constructor TPedidoDAO.Create(AConn: TFDConnection);
+begin
+  FConn := AConn;
+end;
+
+function TPedidoDAO.InserirPedido(APedido: TPedido): Integer;
+var
+  Q: TFDQuery;
+  Item: TPedidoItem;
+begin
+  Result := 0;
+  FConn.StartTransaction;
+  try
+    Q := TFDQuery.Create(nil);
+    try
+      Q.Connection := FConn;
+      Q.SQL.Text := 'INSERT INTO Pedidos (DataEmissao, CodigoCliente, ValorTotal) VALUES (:d, :c, :v)';
+      Q.ParamByName('d').AsDateTime := APedido.DataEmissao;
+      Q.ParamByName('c').AsInteger := APedido.CodigoCliente;
+      Q.ParamByName('v').AsCurrency := APedido.ValorTotal;
+      Q.ExecSQL;
+
+      // Numero gerado por AUTO_INCREMENT
+      Q.SQL.Text := 'SELECT LAST_INSERT_ID() as ID';
+      Q.Open;
+      Result := Q.FieldByName('ID').AsInteger;
+    finally
+      Q.Free;
+    end;
+
+    // Insere itens
+    for Item in APedido.Itens do
+    begin
+      Q := TFDQuery.Create(nil);
+      try
+        Q.Connection := FConn;
+        Q.SQL.Text := 'INSERT INTO PedidoProdutos (NumeroPedido, CodigoProduto, Quantidade, ValorUnitario, ValorTotal) ' +
+                      'VALUES (:n, :p, :q, :vu, :vt)';
+        Q.ParamByName('n').AsInteger := Result;
+        Q.ParamByName('p').AsInteger := Item.CodigoProduto;
+        Q.ParamByName('q').AsFloat := Item.Quantidade;
+        Q.ParamByName('vu').AsCurrency := Item.ValorUnitario;
+        Q.ParamByName('vt').AsCurrency := Item.ValorTotal;
+        Q.ExecSQL;
+      finally
+        Q.Free;
+      end;
+    end;
+
+    // Atualiza total do pedido
+    Q := TFDQuery.Create(nil);
+    try
+      Q.Connection := FConn;
+      Q.SQL.Text := 'UPDATE Pedidos SET ValorTotal = (SELECT COALESCE(SUM(ValorTotal),0) FROM PedidoProdutos WHERE NumeroPedido = :n) WHERE NumeroPedido = :n';
+      Q.ParamByName('n').AsInteger := Result;
+      Q.ExecSQL;
+    finally
+      Q.Free;
+    end;
+
+    FConn.Commit;
+  except
+    on E: Exception do
+    begin
+      if FConn.InTransaction then
+        FConn.Rollback;
+      raise;
+    end;
+  end;
+end;
+
+procedure TPedidoDAO.CarregarPedido(ANumero: Integer; APedido: TPedido);
+var
+  oQuery: TFDQuery;
+  oItem: TPedidoItem;
+begin
+  APedido.Itens.Clear;
+  oQuery := TFDQuery.Create(nil);
+  try
+    oQuery.Connection := FConn;
+    oQuery.SQL.Text := 'SELECT NumeroPedido, DataEmissao, CodigoCliente, ValorTotal FROM Pedidos WHERE NumeroPedido = :n';
+    oQuery.ParamByName('n').AsInteger := ANumero;
+    oQuery.Open;
+
+    if oQuery.IsEmpty then
+      Exit;
+
+    APedido.NumeroPedido := oQuery.FieldByName('NumeroPedido').AsInteger;
+    APedido.DataEmissao := oQuery.FieldByName('DataEmissao').AsDateTime;
+    APedido.CodigoCliente := oQuery.FieldByName('CodigoCliente').AsInteger;
+    APedido.ValorTotal := oQuery.FieldByName('ValorTotal').AsCurrency;
+  finally
+    oQuery.Free;
+  end;
+
+  oQuery := TFDQuery.Create(nil);
+  try
+    oQuery.Connection := FConn;
+    oQuery.SQL.Text := 'SELECT ped.ID, ped.CodigoProduto, prod.Descricao as DescricaoProduto, ped.Quantidade, ped.ValorUnitario, ped.ValorTotal FROM PedidoProdutos ped'
+                      + 'LEFT JOIN produtos prod on prod.Codigo = ped.CodigoProduto'
+                      + 'WHERE ped.NumeroPedido = :nPedido ORDER BY ID';
+    oQuery.ParamByName('nPedido').AsInteger := ANumero;
+    oQuery.Open;
+
+    while not oQuery.Eof do
+    begin
+      oItem := TPedidoItem.Create;
+      oItem.ID := oQuery.FieldByName('ID').AsLargeInt;
+      oItem.CodigoProduto := oQuery.FieldByName('CodigoProduto').AsInteger;
+      oItem.DescricaoProduto := oQuery.FieldByName('DescricaoProduto').AsString;
+      oItem.Quantidade := oQuery.FieldByName('Quantidade').AsFloat;
+      oItem.ValorUnitario := oQuery.FieldByName('ValorUnitario').AsCurrency;
+      oItem.ValorTotal := oQuery.FieldByName('ValorTotal').AsCurrency;
+      APedido.Itens.Add(oItem);
+      oQuery.Next;
+    end;
+  finally
+    oQuery.Free;
+  end;
+end;
+
+procedure TPedidoDAO.CancelarPedido(ANumero: Integer);
+var
+  Q: TFDQuery;
+begin
+  FConn.StartTransaction;
+  try
+    Q := TFDQuery.Create(nil);
+    try
+      Q.Connection := FConn;
+      Q.SQL.Text := 'DELETE FROM Pedidos WHERE NumeroPedido = :n'; // ON DELETE CASCADE apaga itens
+      Q.ParamByName('n').AsInteger := ANumero;
+      Q.ExecSQL;
+    finally
+      Q.Free;
+    end;
+    FConn.Commit;
+  except
+    if FConn.InTransaction then FConn.Rollback;
+    raise;
+  end;
+end;
+
+end.

@@ -1,0 +1,15 @@
+program WKTechPedido;
+
+uses
+  Vcl.Forms,
+  System.SysUtils,
+  fmPedido in 'view\fmPedido.pas' {frmPedido};
+
+{$R *.res}
+
+begin
+  Application.Initialize;
+  Application.MainFormOnTaskbar := True;
+  Application.CreateForm(TfrmPedido, frmPedido);
+  Application.Run;
+end.

@@ -1,0 +1,51 @@
+unit uProdutoDAO;
+
+interface
+
+uses
+  uProduto, FireDAC.Comp.Client;
+
+type
+  TProdutoDAO = class
+  private
+    FConn: TFDConnection;
+  public
+    constructor Create(AConn: TFDConnection);
+    function ObterPorCodigo(ACodigo: Integer): TProduto;
+  end;
+
+implementation
+
+uses System.SysUtils, FireDAC.VCLUI.Wait;
+
+constructor TProdutoDAO.Create(AConn: TFDConnection);
+begin
+  FConn := AConn;
+end;
+
+function TProdutoDAO.ObterPorCodigo(ACodigo: Integer): TProduto;
+var
+  Q: TFDQuery;
+  P: TProduto;
+begin
+  Result := nil;
+  Q := TFDQuery.Create(nil);
+  try
+    Q.Connection := FConn;
+    Q.SQL.Text := 'SELECT Codigo, Descricao, PrecoVenda FROM Produtos WHERE Codigo = :p';
+    Q.ParamByName('p').AsInteger := ACodigo;
+    Q.Open;
+    if not Q.IsEmpty then
+    begin
+      P := TProduto.Create;
+      P.Codigo := Q.FieldByName('Codigo').AsInteger;
+      P.Descricao := Q.FieldByName('Descricao').AsString;
+      P.PrecoVenda := Q.FieldByName('PrecoVenda').AsCurrency;
+      Result := P;
+    end;
+  finally
+    Q.Free;
+  end;
+end;
+
+end.

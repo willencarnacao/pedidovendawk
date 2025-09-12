@@ -1,0 +1,123 @@
+﻿unit uPedidoController;
+
+interface
+
+uses uPedido, uProduto, uProdutoDAO, uClienteDAO, FireDAC.Comp.Client;
+
+type
+  TPedidoController = class
+  private
+    FConn: TFDConnection;
+    FProdutoDAO: TProdutoDAO;
+    FClienteDAO: TClienteDAO;
+  public
+    constructor Create(AConn: TFDConnection);
+    destructor Destroy; override;
+    function AdicionarItem(APedido: TPedido; ACodigoProduto: Integer; AQuantidade: Double; AValorUnitario: Currency): Boolean;
+    procedure GravarPedido(APedido: TPedido);
+    procedure CarregarPedido(ANumero: Integer; APedido: TPedido);
+    procedure CancelarPedido(ANumero: Integer);
+  end;
+
+implementation
+
+uses System.SysUtils, uPedidoDAO, VCL.Dialogs;
+
+constructor TPedidoController.Create(AConn: TFDConnection);
+begin
+  FConn := AConn;
+  FProdutoDAO := TProdutoDAO.Create(FConn);
+  FClienteDAO := TClienteDAO.Create(FConn);
+end;
+
+destructor TPedidoController.Destroy;
+begin
+  FProdutoDAO.Free;
+  FClienteDAO.Free;
+  inherited;
+end;
+
+function TPedidoController.AdicionarItem(APedido: TPedido; ACodigoProduto: Integer; AQuantidade: Double; AValorUnitario: Currency): Boolean;
+var
+  Prod: TProduto;
+  Item: TPedidoItem;
+begin
+  if AQuantidade <= 0 then
+  begin
+    ShowMessage('Quantidade deve ser maior que zero.');
+    Exit(False);
+  end;
+
+  Prod := FProdutoDAO.ObterProduto(ACodigoProduto);
+  if Prod = nil then
+  begin
+    ShowMessage('Produto não encontrado.');
+    Exit(False);
+  end;
+
+  Item := TPedidoItem.Create;
+  Item.CodigoProduto := Prod.Codigo;
+  Item.DescricaoProduto := Prod.Descricao;
+  Item.Quantidade := AQuantidade;
+  if AValorUnitario <= 0 then
+    Item.ValorUnitario := Prod.PrecoVenda
+  else
+    Item.ValorUnitario := AValorUnitario;
+  Item.ValorTotal := Item.Quantidade * Item.ValorUnitario;
+
+  APedido.Itens.Add(Item);
+  APedido.RecalcularTotal;
+end;
+
+procedure TPedidoController.GravarPedido(APedido: TPedido);
+var
+  oDAOPedido: TPedidoDAO;
+  iNumeroPedido: Integer;
+begin
+  if APedido.CodigoCliente = 0 then
+    raise Exception.Create('Informe o cliente.');
+
+  if APedido.Itens.Count = 0 then
+    raise Exception.Create('Inclua ao menos um item.');
+
+  oDAOPedido := TPedidoDAO.Create(FConn);
+  try
+    if (APedido.NumeroPedido > 0) then
+    begin
+      iNumeroPedido := APedido.NumeroPedido;
+      oDAOPedido.AtualizarPedido(APedido);
+    end
+    else
+      iNumeroPedido := oDAOPedido.InserirPedido(APedido);
+
+    APedido.NumeroPedido := iNumeroPedido;
+  finally
+    oDAOPedido.Free;
+  end;
+end;
+
+procedure TPedidoController.CarregarPedido(ANumero: Integer; APedido: TPedido);
+var
+  DAO: TPedidoDAO;
+begin
+  DAO := TPedidoDAO.Create(FConn);
+  try
+    DAO.CarregarPedido(ANumero, APedido);
+  finally
+    DAO.Free;
+  end;
+end;
+
+procedure TPedidoController.CancelarPedido(ANumero: Integer);
+var
+  DAO: TPedidoDAO;
+begin
+  DAO := TPedidoDAO.Create(FConn);
+  try
+    DAO.CancelarPedido(ANumero);
+  finally
+    DAO.Free;
+  end;
+end;
+
+end.

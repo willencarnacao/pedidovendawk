@@ -1,0 +1,52 @@
+unit uClienteDAO;
+
+interface
+
+uses
+  uCliente, FireDAC.Comp.Client;
+
+type
+  TClienteDAO = class
+  private
+    FConn: TFDConnection;
+  public
+    constructor Create(AConn: TFDConnection);
+    function ObterPorCodigo(ACodigo: Integer): TCliente;
+  end;
+
+implementation
+
+uses System.SysUtils;
+
+constructor TClienteDAO.Create(AConn: TFDConnection);
+begin
+  FConn := AConn;
+end;
+
+function TClienteDAO.ObterPorCodigo(ACodigo: Integer): TCliente;
+var
+  oQuery: TFDQuery;
+  oCliente: TCliente;
+begin
+  Result := nil;
+  oQuery := TFDQuery.Create(nil);
+  try
+    oQuery.Connection := FConn;
+    oQuery.SQL.Text := 'SELECT Codigo, Nome, Cidade, UF FROM Clientes WHERE Codigo = :nCodigo';
+    oQuery.ParamByName('nCodigo').AsInteger := ACodigo;
+    oQuery.Open;
+    if not oQuery.IsEmpty then
+    begin
+      oCliente := TCliente.Create;
+      oCliente.Codigo := oQuery.FieldByName('Codigo').AsInteger;
+      oCliente.Nome := oQuery.FieldByName('Nome').AsString;
+      oCliente.Cidade := oQuery.FieldByName('Cidade').AsString;
+      oCliente.UF := oQuery.FieldByName('UF').AsString;
+      Result := oCliente;
+    end;
+  finally
+    oQuery.Free;
+  end;
+end;
+
+end.
