@@ -210,11 +210,10 @@ end;
 
 procedure TfrmPedido.edClienteChange(Sender: TObject);
 begin
-  // TODO: Alimentar FPedido.CodigoCliente?
   FController.CarregarCliente(StrToIntDef(edCliente.Text, 0), FCliente);
   edNomeCliente.Text := FCliente.Nome;
-  btnCarregar.Visible := (FCliente.Codigo > 0);
-  btnCancelar.Visible := (FCliente.Codigo > 0);
+  btnCarregar.Visible := (FCliente.Codigo = 0);
+  btnCancelar.Visible := (FCliente.Codigo = 0);
 end;
 
 procedure TfrmPedido.edProdutoChange(Sender: TObject);

@@ -43,8 +43,23 @@ end;
 function TPedidoController.AdicionarItem(APedido: TPedido; ACodigoProduto: Integer; ADescricaoProduto: String; AQuantidade: Double; AValorUnitario: Currency): Boolean;
 var
   oItem: TPedidoItem;
+  oProduto: TProduto;
 begin
   Result := False;
+
+  oProduto := TProduto.Create;
+  try
+    CarregarProduto(ACodigoProduto, oProduto);
+
+    if (oProduto.Codigo = 0) then
+    begin
+      ShowMessage('Produto não encontrado');
+      Exit;
+    end;
+  finally
+    FreeAndNil(oProduto);
+  end;
+
   if AQuantidade <= 0 then
   begin
     ShowMessage('Quantidade deve ser maior que zero.');
@@ -76,12 +91,21 @@ function TPedidoController.GravarPedido(APedido: TPedido): Boolean;
 var
   oDAOPedido: TPedidoDAO;
   iNumeroPedido: Integer;
+  oCliente: TCliente;
 begin
   Result := False;
-  if APedido.CodigoCliente = 0 then
-  begin
-    ShowMessage('Informe o cliente.');
-    Exit;
+
+  oCliente := TCliente.Create;
+  try
+    CarregarCliente(APedido.CodigoCliente, oCliente);
+
+    if (oCliente.Codigo = 0) then
+    begin
+      ShowMessage('Cliente não encontrado');
+      Exit;
+    end;
+  finally
+    FreeAndNil(oCliente);
   end;
 
   if APedido.Itens.Count = 0 then
