@@ -13,9 +13,11 @@ type
   public
     constructor Create(AConn: TFDConnection);
     destructor Destroy; override;
-    function AdicionarItem(APedido: TPedido; ACodigoProduto: Integer; AQuantidade: Double; AValorUnitario: Currency): Boolean;
+    function AdicionarItem(APedido: TPedido; ACodigoProduto: Integer; ADescricaoProduto: String; AQuantidade: Double; AValorUnitario: Currency): Boolean;
     function GravarPedido(APedido: TPedido): Boolean;
     procedure CarregarPedido(ANumero: Integer; APedido: TPedido);
+    procedure CarregarProduto(ACodigoProduto: Integer; AProduto: TProduto);
+    procedure CarregarCliente(ACodigoCliente: Integer; ACliente: TCliente);
     procedure CancelarPedido(ANumero: Integer);
     procedure LimparPedido(APedido: TPedido);
   end;
@@ -38,9 +40,8 @@ begin
   inherited;
 end;
 
-function TPedidoController.AdicionarItem(APedido: TPedido; ACodigoProduto: Integer; AQuantidade: Double; AValorUnitario: Currency): Boolean;
+function TPedidoController.AdicionarItem(APedido: TPedido; ACodigoProduto: Integer; ADescricaoProduto: String; AQuantidade: Double; AValorUnitario: Currency): Boolean;
 var
-  oProduto: TProduto;
   oItem: TPedidoItem;
 begin
   Result := False;
@@ -50,22 +51,17 @@ begin
     Exit;
   end;
 
-  oProduto := FProdutoDAO.ObterProduto(ACodigoProduto);
-  if oProduto = nil then
+  if AValorUnitario <= 0 then
   begin
-    ShowMessage('Produto não encontrado.');
+    ShowMessage('Valor unitário deve ser maior que zero.');
     Exit;
   end;
 
   oItem := TPedidoItem.Create;
-  oItem.CodigoProduto := oProduto.Codigo;
-  oItem.DescricaoProduto := oProduto.Descricao;
+  oItem.CodigoProduto := ACodigoProduto;
+  oItem.DescricaoProduto := ADescricaoProduto;
   oItem.Quantidade := AQuantidade;
-
-  if AValorUnitario <= 0 then
-    oItem.ValorUnitario := oProduto.PrecoVenda
-  else
-    oItem.ValorUnitario := AValorUnitario;
+  oItem.ValorUnitario := AValorUnitario;
   oItem.ValorTotal := oItem.Quantidade * oItem.ValorUnitario;
 
   try
@@ -79,8 +75,6 @@ end;
 function TPedidoController.GravarPedido(APedido: TPedido): Boolean;
 var
   oDAOPedido: TPedidoDAO;
-  oDAOCliente: TClienteDAO;
-  oCliente: TCliente;
   iNumeroPedido: Integer;
 begin
   Result := False;
@@ -93,19 +87,6 @@ begin
   if APedido.Itens.Count = 0 then
   begin
     ShowMessage('Inclua ao menos um item.');
-    Exit;
-  end;
-
-  oDAOCliente := TClienteDAO.Create(FConn);
-  try
-    oCliente := oDAOCliente.ObterCliente(APedido.CodigoCliente);
-  finally
-    oDAOCliente.Free;
-  end;
-
-  if not(Assigned(oCliente)) then
-  begin
-    ShowMessage('Cliente não encontrado');
     Exit;
   end;
 
@@ -137,15 +118,39 @@ begin
   APedido.Itens.Clear;
 end;
 
+procedure TPedidoController.CarregarCliente(ACodigoCliente: Integer; ACliente: TCliente);
+var
+  oDAOCliente: TClienteDAO;
+begin
+  oDAOCliente := TClienteDAO.Create(FConn);
+  try
+    oDAOCliente.CarregarCliente(ACodigoCliente, ACliente);
+  finally
+    oDAOCliente.Free;
+  end;
+end;
+
 procedure TPedidoController.CarregarPedido(ANumero: Integer; APedido: TPedido);
 var
-  DAO: TPedidoDAO;
+  oDAOPedido: TPedidoDAO;
 begin
-  DAO := TPedidoDAO.Create(FConn);
+  oDAOPedido := TPedidoDAO.Create(FConn);
   try
-    DAO.CarregarPedido(ANumero, APedido);
+    oDAOPedido.CarregarPedido(ANumero, APedido);
   finally
-    DAO.Free;
+    oDAOPedido.Free;
+  end;
+end;
+
+procedure TPedidoController.CarregarProduto(ACodigoProduto: Integer; AProduto: TProduto);
+var
+  oDAOProduto: TProdutoDAO;
+begin
+  oDAOProduto := TProdutoDAO.Create(FConn);
+  try
+    oDAOProduto.CarregarProduto(ACodigoProduto, AProduto);
+  finally
+    oDAOProduto.Free;
   end;
 end;
 

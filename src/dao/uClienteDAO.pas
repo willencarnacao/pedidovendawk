@@ -11,7 +11,7 @@ type
     FConn: TFDConnection;
   public
     constructor Create(AConn: TFDConnection);
-    function ObterCliente(ACodigo: Integer): TCliente;
+    procedure CarregarCliente(ACodigo: Integer; ACliente: TCliente);
   end;
 
 implementation
@@ -23,27 +23,21 @@ begin
   FConn := AConn;
 end;
 
-function TClienteDAO.ObterCliente(ACodigo: Integer): TCliente;
+procedure TClienteDAO.CarregarCliente(ACodigo: Integer; ACliente: TCliente);
 var
   oQuery: TFDQuery;
-  oCliente: TCliente;
 begin
-  Result := nil;
   oQuery := TFDQuery.Create(nil);
   try
     oQuery.Connection := FConn;
     oQuery.SQL.Text := 'SELECT Codigo, Nome, Cidade, UF FROM Clientes WHERE Codigo = :pCodigoCliente';
     oQuery.ParamByName('pCodigoCliente').AsInteger := ACodigo;
     oQuery.Open;
-    if not oQuery.IsEmpty then
-    begin
-      oCliente := TCliente.Create;
-      oCliente.Codigo := oQuery.FieldByName('Codigo').AsInteger;
-      oCliente.Nome := oQuery.FieldByName('Nome').AsString;
-      oCliente.Cidade := oQuery.FieldByName('Cidade').AsString;
-      oCliente.UF := oQuery.FieldByName('UF').AsString;
-      Result := oCliente;
-    end;
+
+    ACliente.Codigo := oQuery.FieldByName('Codigo').AsInteger;
+    ACliente.Nome := oQuery.FieldByName('Nome').AsString;
+    ACliente.Cidade := oQuery.FieldByName('Cidade').AsString;
+    ACliente.UF := oQuery.FieldByName('UF').AsString;
   finally
     oQuery.Free;
   end;

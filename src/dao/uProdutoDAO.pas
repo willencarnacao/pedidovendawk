@@ -11,7 +11,7 @@ type
     FConn: TFDConnection;
   public
     constructor Create(AConn: TFDConnection);
-    function ObterProduto(ACodigo: Integer): TProduto;
+    procedure CarregarProduto(ACodigo: Integer; AProduto: TProduto);
   end;
 
 implementation
@@ -23,26 +23,20 @@ begin
   FConn := AConn;
 end;
 
-function TProdutoDAO.ObterProduto(ACodigo: Integer): TProduto;
+procedure TProdutoDAO.CarregarProduto(ACodigo: Integer; AProduto: TProduto);
 var
   oQuery: TFDQuery;
-  oProduto: TProduto;
 begin
-  Result := nil;
   oQuery := TFDQuery.Create(nil);
   try
     oQuery.Connection := FConn;
     oQuery.SQL.Text := 'SELECT Codigo, Descricao, PrecoVenda FROM Produtos WHERE Codigo = :pCodigoProduto';
     oQuery.ParamByName('pCodigoProduto').AsInteger := ACodigo;
     oQuery.Open;
-    if not oQuery.IsEmpty then
-    begin
-      oProduto := TProduto.Create;
-      oProduto.Codigo := oQuery.FieldByName('Codigo').AsInteger;
-      oProduto.Descricao := oQuery.FieldByName('Descricao').AsString;
-      oProduto.PrecoVenda := oQuery.FieldByName('PrecoVenda').AsCurrency;
-      Result := oProduto;
-    end;
+
+    AProduto.Codigo := oQuery.FieldByName('Codigo').AsInteger;
+    AProduto.Descricao := oQuery.FieldByName('Descricao').AsString;
+    AProduto.PrecoVenda := oQuery.FieldByName('PrecoVenda').AsCurrency;
   finally
     oQuery.Free;
   end;

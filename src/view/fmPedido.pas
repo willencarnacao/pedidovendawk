@@ -4,10 +4,9 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
-  System.Classes,
+  System.Classes, uPedido, uCliente, uProduto,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Grids,
-  uPedido, uDBConnection, FireDAC.Comp.Client, uPedidoController,
-  FireDAC.Stan.Def,
+  uDBConnection, FireDAC.Comp.Client, uPedidoController, FireDAC.Stan.Def,
   FireDAC.Phys.MySQLDef, FireDAC.Stan.Intf, FireDAC.Phys, FireDAC.Phys.MySQL;
 
 type
@@ -20,7 +19,7 @@ type
     edQtd: TEdit;
     lblVlrUnit: TLabel;
     edVlrUnit: TEdit;
-    btnInserir: TButton;
+    btnSalvarItem: TButton;
     btnGravar: TButton;
     btnCarregar: TButton;
     btnCancelar: TButton;
@@ -28,19 +27,31 @@ type
     lblTotal: TLabel;
     FDPhysMySQLDriverLink1: TFDPhysMySQLDriverLink;
     btnLimpar: TButton;
+    edNomeCliente: TEdit;
+    edDescricaoProd: TEdit;
+    lblModoEdicao: TLabel;
     procedure FormCreate(Sender: TObject);
-    procedure btnInserirClick(Sender: TObject);
+    procedure btnSalvarItemClick(Sender: TObject);
     procedure btnGravarClick(Sender: TObject);
     procedure btnCarregarClick(Sender: TObject);
     procedure btnCancelarClick(Sender: TObject);
     procedure gridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure edClienteChange(Sender: TObject);
     procedure btnLimparClick(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
+    procedure edProdutoChange(Sender: TObject);
+    procedure SelecionarItemGrid;
+    procedure AtualizarItemSelecionado;
+    procedure gridSelectCell(Sender: TObject; ACol, ARow: LongInt;
+      var CanSelect: Boolean);
+    procedure gridClick(Sender: TObject);
   private
     FConn: TDBConnection;
     FFD: TFDConnection;
     FController: TPedidoController;
     FPedido: TPedido;
+    FProduto: TProduto;
+    FCliente: TCliente;
     procedure AtualizarGrid;
     procedure AtualizarTotal;
     procedure AjustarTamanhoColunas;
@@ -60,10 +71,14 @@ var
   IniPath: string;
 begin
   Caption := 'Pedidos de Venda - WKTech';
+  btnSalvarItem.Caption := 'Inserir';
+  lblModoEdicao.Caption := '';
   FFD := TDBConnection.GetConnection;
   FFD.Connected := True;
   FController := TPedidoController.Create(FFD);
   FPedido := TPedido.Create;
+  FProduto := TProduto.Create;
+  FCliente := TCliente.Create;
 
   grid.ColCount := 5;
   grid.FixedRows := 1;
@@ -73,6 +88,13 @@ begin
   grid.Cells[2, 0] := 'Qtde';
   grid.Cells[3, 0] := 'Vlr. Unit.';
   grid.Cells[4, 0] := 'Vlr. Total';
+end;
+
+procedure TfrmPedido.FormDestroy(Sender: TObject);
+begin
+  FreeAndNil(FProduto);
+  FreeAndNil(FCliente);
+  FreeAndNil(FPedido);
 end;
 
 procedure TfrmPedido.AtualizarGrid;
@@ -91,44 +113,115 @@ begin
   end;
 end;
 
+procedure TfrmPedido.AtualizarItemSelecionado;
+var
+  idx: Integer;
+begin
+  if (grid.Row > 0) then
+  begin
+    idx := grid.Row - 1;
+
+    if (idx >= 0) and (idx < FPedido.Itens.Count) then
+    begin
+      FPedido.Itens[idx].CodigoProduto   := StrToIntDef(edProduto.Text, FPedido.Itens[idx].CodigoProduto);
+      FPedido.Itens[idx].DescricaoProduto:= edDescricaoProd.Text;
+      FPedido.Itens[idx].Quantidade      := StrToFloatDef(edQtd.Text, FPedido.Itens[idx].Quantidade);
+      FPedido.Itens[idx].ValorUnitario   := StrToFloatDef(edVlrUnit.Text, FPedido.Itens[idx].ValorUnitario);
+      FPedido.Itens[idx].ValorTotal      := FPedido.Itens[idx].Quantidade * FPedido.Itens[idx].ValorUnitario;
+
+      FPedido.RecalcularTotal;
+      AtualizarGrid;
+      AtualizarTotal;
+    end;
+  end;
+end;
+
 procedure TfrmPedido.AtualizarTotal;
 begin
   lblTotal.Caption := 'Valor total do pedido: R$ ' + FormatFloat('0.00', FPedido.ValorTotal);
 end;
 
-procedure TfrmPedido.btnInserirClick(Sender: TObject);
+procedure TfrmPedido.btnSalvarItemClick(Sender: TObject);
 var
   iCodigoProduto: Integer;
   nQuantidade: Double;
   nValorUnitario: Currency;
+  idx: Integer;
 begin
-  iCodigoProduto := StrToIntDef(edProduto.Text, 0);
-  nQuantidade := StrToFloatDef(edQtd.Text, 0);
-  nValorUnitario := StrToFloatDef(edVlrUnit.Text, 0);
-
-  if FController.AdicionarItem(FPedido, iCodigoProduto, nQuantidade, nValorUnitario) then
+  if btnSalvarItem.Caption = 'Inserir' then
   begin
-    AtualizarGrid;
-    AtualizarTotal;
-    edProduto.Clear;
-    edQtd.Clear;
-    edVlrUnit.Clear;
-    edProduto.SetFocus;
+    // Modo inserir (novo item)
+    iCodigoProduto := StrToIntDef(edProduto.Text, 0);
+    nQuantidade := StrToFloatDef(edQtd.Text, 0);
+    nValorUnitario := StrToFloatDef(edVlrUnit.Text, 0);
+
+    if FController.AdicionarItem(FPedido, FProduto.Codigo, FProduto.Descricao, nQuantidade, nValorUnitario) then
+    begin
+      AtualizarGrid;
+      AtualizarTotal;
+      edProduto.Clear;
+      edDescricaoProd.Clear;
+      edQtd.Clear;
+      edVlrUnit.Clear;
+      edProduto.SetFocus;
+    end;
+  end
+  else if btnSalvarItem.Caption = 'Atualizar' then
+  begin
+    // Modo atualizar (editar item selecionado)
+    idx := grid.Row - 1;
+    if (idx >= 0) and (idx < FPedido.Itens.Count) then
+    begin
+      FPedido.Itens[idx].CodigoProduto    := StrToIntDef(edProduto.Text, FPedido.Itens[idx].CodigoProduto);
+      FPedido.Itens[idx].DescricaoProduto := edDescricaoProd.Text;
+      FPedido.Itens[idx].Quantidade       := StrToFloatDef(edQtd.Text, FPedido.Itens[idx].Quantidade);
+      FPedido.Itens[idx].ValorUnitario    := StrToFloatDef(edVlrUnit.Text, FPedido.Itens[idx].ValorUnitario);
+      FPedido.Itens[idx].ValorTotal       := FPedido.Itens[idx].Quantidade * FPedido.Itens[idx].ValorUnitario;
+
+      FPedido.RecalcularTotal;
+      AtualizarGrid;
+      AtualizarTotal;
+
+      // Resetar para modo Inserir
+      btnSalvarItem.Caption := 'Inserir';
+      lblModoEdicao.Caption := '';
+      edProduto.Clear;
+      edDescricaoProd.Clear;
+      edQtd.Clear;
+      edVlrUnit.Clear;
+      edProduto.SetFocus;
+    end;
   end;
 end;
 
 procedure TfrmPedido.btnLimparClick(Sender: TObject);
 begin
-  edCliente.Text := EmptyStr;
+  edCliente.Clear;
+  edNomeCliente.Clear;
+  edProduto.Clear;
+  edQtd.Clear;
+  edVlrUnit.Clear;
   FController.LimparPedido(FPedido);
   AtualizarGrid;
   AtualizarTotal;
+  btnSalvarItem.Caption := 'Inserir';
+  lblModoEdicao.Caption := '';
 end;
 
 procedure TfrmPedido.edClienteChange(Sender: TObject);
 begin
-  btnCarregar.Visible := Trim(edCliente.Text) = EmptyStr;
-  btnCancelar.Visible := Trim(edCliente.Text) = EmptyStr;
+  // TODO: Alimentar FPedido.CodigoCliente?
+  FController.CarregarCliente(StrToIntDef(edCliente.Text, 0), FCliente);
+  edNomeCliente.Text := FCliente.Nome;
+  btnCarregar.Visible := (FCliente.Codigo > 0);
+  btnCancelar.Visible := (FCliente.Codigo > 0);
+end;
+
+procedure TfrmPedido.edProdutoChange(Sender: TObject);
+begin
+  FController.CarregarProduto(StrToIntDef(edProduto.Text, 0), FProduto);
+  edDescricaoProd.Text := FProduto.Descricao;
+  edVlrUnit.Text := CurrToStr(FProduto.PrecoVenda);
 end;
 
 procedure TfrmPedido.btnGravarClick(Sender: TObject);
@@ -176,6 +269,11 @@ begin
   end;
 end;
 
+procedure TfrmPedido.gridClick(Sender: TObject);
+begin
+  SelecionarItemGrid;
+end;
+
 procedure TfrmPedido.gridKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 var
@@ -185,14 +283,13 @@ begin
   if (Key = VK_RETURN) and (grid.Row > 0) then
   begin
     idx := grid.Row - 1;
-    FPedido.Itens[idx].Quantidade :=
-      StrToFloatDef(InputBox('Editar', 'Quantidade:', grid.Cells[2, grid.Row]),
-      FPedido.Itens[idx].Quantidade);
-    FPedido.Itens[idx].ValorUnitario :=
-      StrToFloatDef(InputBox('Editar', 'Valor Unitário:',
-      grid.Cells[3, grid.Row]), FPedido.Itens[idx].ValorUnitario);
-    FPedido.Itens[idx].ValorTotal := FPedido.Itens[idx].Quantidade *
-      FPedido.Itens[idx].ValorUnitario;
+    FPedido.Itens[idx].Quantidade := StrToFloatDef(InputBox('Editar', 'Quantidade:',
+                                     grid.Cells[2, grid.Row]), FPedido.Itens[idx].Quantidade);
+    FPedido.Itens[idx].ValorUnitario := StrToFloatDef(InputBox('Editar', 'Valor Unitário:',
+                                        grid.Cells[3, grid.Row]), FPedido.Itens[idx].ValorUnitario);
+    FPedido.Itens[idx].ValorTotal := FPedido.Itens[idx].Quantidade * FPedido.Itens[idx].ValorUnitario;
+    edQtd.Text         := FloatToStr(FPedido.Itens[idx].Quantidade);
+    edVlrUnit.Text     := CurrToStr(FPedido.Itens[idx].ValorUnitario);
     FPedido.RecalcularTotal;
     AtualizarGrid;
     AtualizarTotal;
@@ -208,6 +305,34 @@ begin
       AtualizarGrid;
       AtualizarTotal;
     end
+  end;
+end;
+
+procedure TfrmPedido.gridSelectCell(Sender: TObject; ACol, ARow: LongInt;
+  var CanSelect: Boolean);
+begin
+  SelecionarItemGrid;
+end;
+
+procedure TfrmPedido.SelecionarItemGrid;
+var
+  idx: Integer;
+begin
+  if (grid.Row > 0) then
+  begin
+    idx := grid.Row - 1;
+
+    if (idx >= 0) and (idx < FPedido.Itens.Count) then
+    begin
+      edProduto.Text     := FPedido.Itens[idx].CodigoProduto.ToString;
+      edDescricaoProd.Text := FPedido.Itens[idx].DescricaoProduto;
+      edQtd.Text         := FloatToStr(FPedido.Itens[idx].Quantidade);
+      edVlrUnit.Text     := CurrToStr(FPedido.Itens[idx].ValorUnitario);
+
+      // Troca o botão para modo "Atualizar"
+      btnSalvarItem.Caption := 'Atualizar';
+      lblModoEdicao.Caption := 'Editando item ' + (idx + 1).ToString;
+    end;
   end;
 end;
 
